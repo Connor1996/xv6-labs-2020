@@ -56,6 +56,26 @@ kvminithart()
   sfence_vma();
 }
 
+void vmprintwalk(pagetable_t pagetable, int level) {
+ for(int i=0; i < 512; i++) {
+    pte_t pte = pagetable[i];
+    if((pte & PTE_V)){
+      for(int j=2-level; j>=0; j--) {
+        printf("..");
+        if (j != 0) printf(" ");
+      }
+      printf("%d: pte %p pa %p\n", i, pte, PTE2PA(pte));
+      if ((pte & (PTE_R|PTE_W|PTE_X)) == 0)
+        vmprintwalk((pagetable_t)PTE2PA(pte), level-1);
+    }
+  }
+}
+
+void vmprint(pagetable_t pagetable) {
+  printf("page table %p\n", pagetable);
+  vmprintwalk(pagetable, 2);
+}
+
 // Return the address of the PTE in page table pagetable
 // that corresponds to virtual address va.  If alloc!=0,
 // create any required page-table pages.
