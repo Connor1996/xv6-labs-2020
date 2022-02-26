@@ -145,7 +145,7 @@ freeproc(struct proc *p)
     kfree((void*)p->trapframe);
   p->trapframe = 0;
   if(p->kstack) {
-    uvmunmap(p->kernel_pagetable, p->kstack, 1, 1);
+    vmunmap(p->kernel_pagetable, p->kstack, 1, 1);
   }
   if(p->pagetable)
     proc_freepagetable(p->pagetable, p->sz);
@@ -182,15 +182,15 @@ proc_pagetable(struct proc *p)
   // to/from user space, so not PTE_U.
   if(mappages(pagetable, TRAMPOLINE, PGSIZE,
               (uint64)trampoline, PTE_R | PTE_X) < 0){
-    uvmfree(pagetable, 0);
+    vmfree(pagetable, 0);
     return 0;
   }
 
   // map the trapframe just below TRAMPOLINE, for trampoline.S.
   if(mappages(pagetable, TRAPFRAME, PGSIZE,
               (uint64)(p->trapframe), PTE_R | PTE_W) < 0){
-    uvmunmap(pagetable, TRAMPOLINE, 1, 0);
-    uvmfree(pagetable, 0);
+    vmunmap(pagetable, TRAMPOLINE, 1, 0);
+    vmfree(pagetable, 0);
     return 0;
   }
 
@@ -202,20 +202,20 @@ proc_pagetable(struct proc *p)
 void
 proc_freepagetable(pagetable_t pagetable, uint64 sz)
 {
-  uvmunmap(pagetable, TRAMPOLINE, 1, 0);
-  uvmunmap(pagetable, TRAPFRAME, 1, 0);
-  uvmfree(pagetable, sz);
+  vmunmap(pagetable, TRAMPOLINE, 1, 0);
+  vmunmap(pagetable, TRAPFRAME, 1, 0);
+  vmfree(pagetable, sz);
 }
 
 void proc_freekernelpagetable(pagetable_t pagetable) {
-  uvmunmap(pagetable, UART0, 1, 0);
-  uvmunmap(pagetable, VIRTIO0, 1, 0);
-  uvmunmap(pagetable, CLINT, PGROUNDUP(0x10000)/PGSIZE, 0);
-  uvmunmap(pagetable, PLIC, PGROUNDUP(0x400000)/PGSIZE, 0);
-  uvmunmap(pagetable, KERNBASE, PGROUNDUP((uint64)etext-KERNBASE)/PGSIZE, 0);
-  uvmunmap(pagetable, (uint64)etext, PGROUNDUP(PHYSTOP-(uint64)etext)/PGSIZE, 0);
-  uvmunmap(pagetable, TRAMPOLINE, 1, 0);
-  uvmfree(pagetable, 0);
+  vmunmap(pagetable, UART0, 1, 0);
+  vmunmap(pagetable, VIRTIO0, 1, 0);
+  vmunmap(pagetable, CLINT, PGROUNDUP(0x10000)/PGSIZE, 0);
+  vmunmap(pagetable, PLIC, PGROUNDUP(0x400000)/PGSIZE, 0);
+  vmunmap(pagetable, KERNBASE, PGROUNDUP((uint64)etext-KERNBASE)/PGSIZE, 0);
+  vmunmap(pagetable, (uint64)etext, PGROUNDUP(PHYSTOP-(uint64)etext)/PGSIZE, 0);
+  vmunmap(pagetable, TRAMPOLINE, 1, 0);
+  vmfree(pagetable, 0);
 }
 
 // a user program that calls exec("/init")
