@@ -114,9 +114,7 @@ found:
   if(pa == 0)
     panic("kalloc");
   uint64 va = KSTACK((int) (p - proc));
-  if (mappages(p->kernel_pagetable, va, PGSIZE, (uint64)pa, PTE_R | PTE_W) != 0) {
-    panic("kmappages");
-  }
+  kvmmap(p->kernel_pagetable, va, (uint64)pa, PGSIZE, PTE_R | PTE_W);
   p->kstack = va;
   // An empty user page table.
   p->pagetable = proc_pagetable(p);
@@ -243,6 +241,7 @@ userinit(void)
   // and data into it.
   uvminit(p->pagetable, initcode, sizeof(initcode));
   p->sz = PGSIZE;
+  uvmmap2kvm(p->pagetable, p->kernel_pagetable, 0, p->sz);
 
   // prepare for the very first "return" from kernel to user.
   p->trapframe->epc = 0;      // user program counter
@@ -266,11 +265,20 @@ growproc(int n)
 
   sz = p->sz;
   if(n > 0){
+    if(PGROUNDUP(sz + n) > PLIC) {
+      return -1;
+    }
     if((sz = uvmalloc(p->pagetable, sz, sz + n)) == 0) {
+      return -1;
+    }
+    if(sz < sz + n && uvmmap2kvm(p->pagetable, p->kernel_pagetable, sz, sz + n) != 0) {
       return -1;
     }
   } else if(n < 0){
     sz = uvmdealloc(p->pagetable, sz, sz + n);
+    if(sz > sz + n) {
+      vmunmap(p->kernel_pagetable, PGROUNDUP(sz + n), (PGROUNDUP(sz) - PGROUNDUP(sz + n)) / PGSIZE, 0);
+    }
   }
   p->sz = sz;
   return 0;
@@ -292,6 +300,12 @@ fork(void)
 
   // Copy user memory from parent to child.
   if(uvmcopy(p->pagetable, np->pagetable, p->sz) < 0){
+    freeproc(np);
+    release(&np->lock);
+    return -1;
+  }
+  // copy to kernel pagetable 
+  if(uvmmap2kvm(np->pagetable, np->kernel_pagetable, 0, p->sz) < 0){
     freeproc(np);
     release(&np->lock);
     return -1;
