@@ -213,6 +213,31 @@ devintr()
     w_sip(r_sip() & ~2);
 
     return 2;
+  } else if(scause == 0x000000000000000FL || 
+            scause == 0x000000000000000DL){
+    struct proc *p = myproc();
+    uint64 va = r_stval();
+    if(va > p->sz) {
+      p->killed = 1;
+      return 1;
+    }
+    if(va > p->stackbase - PGSIZE && va < p->stackbase) {
+      p->killed = 1;
+      return 1;
+    }
+
+    char *mem = kalloc();
+    if (mem == 0) {
+      p->killed = 1;
+      return 1;
+    }
+    memset(mem, 0, PGSIZE);
+
+    if(mappages(p->pagetable, PGROUNDDOWN(va), PGSIZE, (uint64)mem, PTE_W|PTE_X|PTE_R|PTE_U) != 0){
+      kfree(mem);
+      p->killed = 1;
+    }
+    return 1;
   } else {
     return 0;
   }
